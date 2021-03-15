@@ -1,0 +1,270 @@
+<header *ngIf="dataService.summary$ | async as summary">
+  <h1>
+    <span class="brand">COVID-19 Vaccination Tracker</span>
+    More than
+    <span class="text-highlight"
+      >{{ summary.total_vaccinations / 1000000 | number: '1.0-0' }} million</span
+    >
+    doses of COVID-19 vaccines have been administered across the world
+  </h1>
+  <h3>Updated on: {{ summary.date | date: 'longDate' }}</h3>
+</header>
+
+<main>
+  <p class="section-title">World Map: Total doses administered per 100 people by country</p>
+
+  <highcharts-chart
+    [Highcharts]="Highcharts"
+    [constructorType]="'mapChart'"
+    [options]="worldMapChartOptions"
+  >
+  </highcharts-chart>
+
+  <hr />
+
+  <h2 class="section-title">Current Status of Vaccination by Country/Region</h2>
+
+  <div class="table-container">
+    <table class="shadow-2">
+      <thead>
+        <tr>
+          <th style="max-width: 0">
+            <input
+              type="text"
+              placeholder="search"
+              style="max-width: 100%"
+              ngModel
+              (ngModelChange)="dataService.searchInput$.next($event.toUpperCase())"
+            />
+          </th>
+          <th></th>
+          <th class="text-center" colspan="2">At least 1 dose given to</th>
+          <th class="text-center" colspan="2">Fully Vaccinated</th>
+          <th></th>
+        </tr>
+        <tr [attr.data-sort-order]="dataService.sortOrder$ | async">
+          <th
+            (click)="dataService.sortBy$.next('country')"
+            [class.active]="(dataService.sortBy$ | async) === 'country'"
+          >
+            Country/Region
+          </th>
+          <th
+            class="text-right"
+            (click)="dataService.sortBy$.next('total_vaccinations')"
+            [class.active]="(dataService.sortBy$ | async) === 'total_vaccinations'"
+          >
+            Total Doses Administered
+          </th>
+
+          <th
+            class="text-right border-left"
+            (click)="dataService.sortBy$.next('people_vaccinated')"
+            [class.active]="(dataService.sortBy$ | async) === 'people_vaccinated'"
+          >
+            Number of People
+          </th>
+          <th
+            class="text-right"
+            (click)="dataService.sortBy$.next('people_vaccinated_per_hundred')"
+            [class.active]="(dataService.sortBy$ | async) === 'people_vaccinated_per_hundred'"
+          >
+            % of Population
+          </th>
+
+          <th
+            class="text-right border-left"
+            (click)="dataService.sortBy$.next('people_fully_vaccinated')"
+            [class.active]="(dataService.sortBy$ | async) === 'people_fully_vaccinated'"
+          >
+            Number of People
+          </th>
+          <th
+            class="text-right border-right"
+            (click)="dataService.sortBy$.next('people_fully_vaccinated_per_hundred')"
+            [class.active]="(dataService.sortBy$ | async) === 'people_fully_vaccinated_per_hundred'"
+          >
+            % of Population
+          </th>
+
+          <th
+            class="text-right"
+            (click)="dataService.sortBy$.next('daily_vaccinations')"
+            [class.active]="(dataService.sortBy$ | async) === 'daily_vaccinations'"
+          >
+            Daily Average Doses
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          *ngFor="let country of dataService.vaccinationFilteredList$ | async; trackBy: trackByFn"
+        >
+          <td class="white-space-nowrap">
+            <figure>
+              <img
+                *ngIf="country.imageUrl; else globeEmoji"
+                [src]="country.imageUrl"
+                alt="{{ country.country }}"
+              />
+              <ng-template #globeEmoji><span class="emoji">🌍</span></ng-template>
+            </figure>
+            <span>{{ country.shortName || country.country }}</span>
+          </td>
+          <td class="numbers">{{ country.latest.total_vaccinations | number }}</td>
+
+          <td class="numbers">{{ country.latest.people_vaccinated | number }}</td>
+          <td class="numbers">
+            <span>{{ country.latest.people_vaccinated_per_hundred | number: '1.1-1' }}</span>
+          </td>
+
+          <td class="numbers">{{ country.latest.people_fully_vaccinated | number }}</td>
+          <td class="numbers">
+            <span>{{ country.latest.people_fully_vaccinated_per_hundred | number: '1.1-1' }}</span>
+          </td>
+
+          <td class="numbers">{{ country.latest.daily_vaccinations | number }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="buttons" *ngIf="!(dataService.searchInput$ | async)">
+      <button
+        class="btn"
+        (click)="dataService.maxTableEntries$.next(!dataService.maxTableEntries$.value)"
+      >
+        {{ (dataService.maxTableEntries$ | async) ? 'Show Less' : 'Show More' }}
+      </button>
+    </div>
+  </div>
+
+  <div *ngIf="vaccineProgressSelectedRegionSummary$ | async as summary">
+    <hr />
+    <h2 class="section-title">Vaccination Progress Over Time</h2>
+    <select
+      [ngModel]="vaccineProgressSelectedRegion$ | async"
+      (ngModelChange)="vaccineProgressSelectedRegion$.next($event)"
+    >
+      <option
+        *ngFor="let region of dataService.vaccinationDataList$ | async"
+        [value]="region.iso_code"
+      >
+        {{ region.shortName || region.country }}
+      </option>
+    </select>
+    <p
+      class="section-title"
+      *ngIf="
+        summary.latest?.people_vaccinated_per_hundred && summary.data?.length;
+        else notEnoughData
+      "
+    >
+      <b class="text-highlight">{{ summary.latest.people_vaccinated_per_hundred }}%</b>
+      population of
+      {{
+        summary.shortName || summary.country.endsWith('s') || summary.iso_code === 'OWID_WRL'
+          ? 'the'
+          : ''
+      }}
+      <b class="text-highlight">{{ summary.shortName || summary.country }}</b> got at least 1 dose
+      <ng-container *ngIf="summary.latest.people_fully_vaccinated_per_hundred">
+        and
+        <b class="text-highlight">{{ summary.latest.people_fully_vaccinated_per_hundred }}%</b>
+        got fully vaccinated
+      </ng-container>
+      as of <b class="text-highlight">{{ summary.latest.date | date: 'longDate' }}</b
+      >.
+    </p>
+    <ng-template #notEnoughData>
+      <p class="section-title">
+        <i> There's not enough data available from {{ summary.country }}. </i>
+      </p>
+    </ng-template>
+  </div>
+
+  <highcharts-chart
+    (chartInstance)="countryWiseProgressChart = $event"
+    [Highcharts]="Highcharts"
+    [options]="countryWiseProgressChartOptions"
+  >
+  </highcharts-chart>
+
+  <div *ngIf="projectedVaccineProgressSelectedRegionSummary$ | async as summary">
+    <hr />
+    <h2 class="section-title">Projected Vaccination Progress</h2>
+    <select
+      [ngModel]="projectedVaccineProgressSelectedRegion$ | async"
+      (ngModelChange)="projectedVaccineProgressSelectedRegion$.next($event)"
+    >
+      <option
+        *ngFor="let region of dataService.vaccinationDataList$ | async"
+        [value]="region.iso_code"
+      >
+        {{ region.shortName || region.country }}
+      </option>
+    </select>
+    <p
+      class="section-title"
+      *ngIf="summary.projectedFullDose && summary.projectedOneDose; else notEnoughData"
+    >
+      With the current daily vaccination rate of 1st dose at
+      <b class="text-highlight">{{ summary.projectedOneDose.daily_vaccinations | number }}</b
+      >, the whole of
+      {{
+        summary.shortName || summary.country.endsWith('s') || summary.iso_code === 'OWID_WRL'
+          ? 'the'
+          : ''
+      }}
+      <b class="text-highlight">{{ summary.shortName || summary.country }}</b> is expected to get
+      vaccinated by
+      <b class="text-highlight">{{ summary.projectedOneDose.date | date: 'longDate' }}</b
+      >, and
+      <br />
+      <br />
+      With the current daily vaccination rate of full dose at
+      <b class="text-highlight">{{ summary.projectedFullDose.daily_vaccinations | number }}</b
+      >, the whole of
+      {{
+        summary.shortName || summary.country.endsWith('s') || summary.iso_code === 'OWID_WRL'
+          ? 'the'
+          : ''
+      }}
+      <b class="text-highlight">{{ summary.shortName || summary.country }}</b> is expected get fully
+      vaccinated by
+      <b class="text-highlight">{{ summary.projectedFullDose.date | date: 'longDate' }}</b
+      >.
+      <br />
+      <br />
+      <b *ngIf="isFullDoseHappeningBefore1Dose"
+        >Note: The full-dose vaccination is projected to complete even before the 1st dose
+        vaccination because the current daily rate of full-dose vaccination is greater than current
+        daily 1st-dose vaccination.</b
+      >
+    </p>
+    <ng-template #notEnoughData>
+      <p class="section-title">
+        <i> There's not enough data available from {{ summary.country }}. </i>
+      </p>
+    </ng-template>
+  </div>
+
+  <highcharts-chart
+    (chartInstance)="projectedCountryWiseProgressChart = $event"
+    [Highcharts]="Highcharts"
+    [options]="projectedCountryWiseProgressChartOptions"
+  >
+  </highcharts-chart>
+</main>
+
+<footer>
+  <p>
+    Copyright © 2020
+    <a href="https://github.com/dabalyan/" target="_blank" rel="noopener noreferrer">Ankit Singh</a>
+  </p>
+  <p>
+    Raw Data Source:
+    <a href="https://ourworldindata.org/" target="_blank" rel="noopener noreferrer"
+      >Our World in Data</a
+    >
+  </p>
+</footer>
