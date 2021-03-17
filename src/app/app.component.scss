@@ -3,36 +3,75 @@ $borderColor: #bebebe;
 
 :host {
   display: block;
-  margin: 28px auto;
-  max-width: 1024px;
-  width: 100%;
+}
 
-  @media all and (max-width: 600px) {
-    margin: 12px;
-  }
+::-webkit-scrollbar {
+  background-color: #e5e5e5;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #8c8c8c;
 }
 
 hr {
   margin: 36px;
 }
 
+.brand {
+  position: relative;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  background: #000;
+  color: $dayBg;
+  font-size: 2em;
+  font-weight: 400;
+  line-height: 1;
+  min-height: 48px;
+  padding: 6px;
+
+  img {
+    width: 24px;
+    flex-shrink: 0;
+    margin-right: 6px;
+  }
+
+  &:after {
+    content: '';
+    position: absolute;
+    left: 100%;
+    top: 0;
+    bottom: 0;
+    border-left: 50vw solid black;
+    border-bottom: 48px solid #ff670000;
+  }
+
+  @media all and (max-width: 800px) {
+    display: flex;
+  }
+}
+
 header {
   text-align: center;
-  margin: 48px auto 40px;
 
   h1 {
     text-transform: capitalize;
   }
 
-  .brand {
-    display: inline-block;
-    position: absolute;
-    left: 0;
-    top: 0;
-    background: #000;
-    color: $dayBg;
-    font-weight: 400;
-    padding: 6px;
+  hr {
+    width: 20%;
+    margin: 12px auto 48px;
+  }
+}
+
+header,
+main {
+  margin: 18px auto;
+  max-width: 1024px;
+  width: 100%;
+
+  @media all and (max-width: 600px) {
+    padding: 0 4px;
   }
 }
 
@@ -210,7 +249,7 @@ select {
 footer {
   display: flex;
   justify-content: space-around;
-  margin: 200px 0 0;
+  margin: 140px 0 0;
   padding: 12px;
   text-align: center;
   font-weight: 400;

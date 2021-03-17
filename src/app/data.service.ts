@@ -102,19 +102,28 @@ export class DataService {
           'https://covid.ourworldindata.org/data/vaccinations/vaccinations.json'
         )
     ).pipe(
-      tap(data => {
-        data.forEach(country => {
-          country.latest = country?.data?.[country.data.length - 1];
+      map(data => {
+        data = data.filter(country => {
+          if (
+            country.iso_code !== 'OWID_WRL' &&
+            country.iso_code.startsWith('OWID') &&
+            !Alpha3to2[country.iso_code]
+          ) {
+            return false;
+          }
+          country.latest = country.data?.[country.data.length - 1];
           country.date = new Date(country.latest?.date).toLocaleDateString();
           country.alpha2 = Alpha3to2[country.iso_code];
           country.shortName = NameExchange[country.alpha2];
           country.imageUrl =
             country.alpha2 &&
             `https://raw.githubusercontent.com/hampusborgos/country-flags/master/png100px/${country.alpha2.toLowerCase()}.png`;
+          return true;
         });
         if (isDevMode()) {
           localStorage.setItem('data', JSON.stringify(data));
         }
+        return data;
       })
     );
   }
