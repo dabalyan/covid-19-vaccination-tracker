@@ -18,10 +18,10 @@ interface VaccinationDataPerCountry {
   alpha2: string;
   imageUrl: string;
   latest: VaccinationDataEntry;
-  projectedOneDose: VaccinationDataEntry;
-  projectedFullDose: VaccinationDataEntry;
-  projectedDataOneDose: VaccinationDataEntry[];
-  projectedDataFullDose: VaccinationDataEntry[];
+  projectedFirstDose?: VaccinationDataEntry;
+  projectedFullDose?: VaccinationDataEntry;
+  projectedDataFirstDose?: VaccinationDataEntry[];
+  projectedDataFullDose?: VaccinationDataEntry[];
   data: VaccinationDataEntry[];
   date: string;
 }

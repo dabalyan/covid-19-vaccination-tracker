@@ -5,6 +5,7 @@ $borderColor: #bebebe;
   display: block;
   margin: 28px auto;
   max-width: 1024px;
+  width: 100%;
 
   @media all and (max-width: 600px) {
     margin: 12px;
@@ -12,7 +13,7 @@ $borderColor: #bebebe;
 }
 
 hr {
-  margin: 48px;
+  margin: 36px;
 }
 
 header {
@@ -44,6 +45,7 @@ h6,
 p {
   margin: auto;
   max-width: 600px;
+  text-align: center;
 }
 
 .text-highlight {
@@ -52,8 +54,32 @@ p {
 
 .section-title {
   margin: 12px auto;
-  font-size: 1.2rem;
-  text-align: center;
+
+  @at-root h2#{&} {
+    padding: 12px 0;
+  }
+
+  a {
+    color: inherit;
+    &[href^='#'] {
+      position: relative;
+      &:hover:before {
+        content: '#';
+        position: absolute;
+        margin-right: 0.1em;
+        right: 100%;
+        top: -0.15em;
+        font-size: 1.2em;
+        font-weight: bolder;
+        color: rgb(0, 179, 107);
+      }
+    }
+  }
+}
+
+.section-description {
+  margin: 12px auto;
+  font-size: 1.3rem;
 }
 
 highcharts-chart {
@@ -68,9 +94,11 @@ img {
 }
 
 figure {
-  margin-right: 4px;
-  display: inline-block;
+  margin-right: 6px;
+  height: 30px;
   width: 28px;
+  display: inline-flex;
+  align-items: center;
   span {
     font-size: 22px;
   }
@@ -78,7 +106,7 @@ figure {
 
 .table-container {
   overflow: auto;
-  margin: 28px 0;
+  margin: 12px 0;
   max-width: 96vw;
   padding: 10px;
 
@@ -172,6 +200,11 @@ select {
   margin: 12px auto auto;
   font-size: 1.2rem;
   outline: none;
+
+  &:focus {
+    border: 1px solid #00b36f;
+    box-shadow: 0 0 0 1px #00b36f;
+  }
 }
 
 footer {

@@ -5,6 +5,7 @@
 }
 
 html {
+  font-size: 14px;
   height: 100%;
 }
 
@@ -58,4 +59,13 @@ button {
   border: none;
   user-select: none;
   text-transform: capitalize;
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  background-color: rgb(0 0 0 / 16%);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #1a1a1a;
 }

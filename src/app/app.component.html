@@ -1,30 +1,66 @@
-<header *ngIf="dataService.summary$ | async as summary">
+<ng-template #spinner let-svgWidth="svgWidth" let-svgColor="svgColor">
+  <svg
+    *ngIf="!(dataService.vaccinationDataList$ | async)"
+    viewBox="0 20 100 60"
+    preserveAspectRatio="xMidYMid"
+    style="margin: auto; display: block"
+    [style.width]="svgWidth"
+  >
+    <path
+      fill="none"
+      [attr.stroke]="svgColor || '#32a979'"
+      stroke-width="8"
+      stroke-dasharray="225.7982568359375 30.790671386718742"
+      d="M24.3 30C11.4 30 5 43.3 5 50s6.4 20 19.3 20c19.3 0 32.1-40 51.4-40 C88.6 30 95 43.3 95 50s-6.4 20-19.3 20C56.4 70 43.6 30 24.3 30z"
+      stroke-linecap="round"
+      style="transform: scale(1); transform-origin: 50px 50px"
+    >
+      <animate
+        attributeName="stroke-dashoffset"
+        repeatCount="indefinite"
+        dur="1.8867924528301885s"
+        keyTimes="0;1"
+        values="0;256.58892822265625"
+      ></animate>
+    </path>
+  </svg>
+</ng-template>
+
+<header>
   <h1>
     <span class="brand">COVID-19 Vaccination Tracker</span>
-    More than
-    <span class="text-highlight"
-      >{{ summary.total_vaccinations / 1000000 | number: '1.0-0' }} million</span
-    >
-    doses of COVID-19 vaccines have been administered across the world
+    <ng-container *ngIf="dataService.summary$ | async as summary">
+      More than
+      <span class="text-highlight"
+        >{{ summary.total_vaccinations / 1000000 | number: '1.0-0' }} million</span
+      >
+      doses of COVID-19 vaccines have been administered across the world
+    </ng-container>
   </h1>
-  <h3>Updated on: {{ summary.date | date: 'longDate' }}</h3>
+  <h3 *ngIf="dataService.summary$ | async as summary">
+    Updated on: {{ summary.date | date: 'longDate' }}
+  </h3>
 </header>
 
 <main>
-  <p class="section-title">World Map: Total doses administered per 100 people by country</p>
-
+  <ng-container *ngTemplateOutlet="spinner; context: {svgWidth: '50px'}"></ng-container>
+  <p class="section-description">World Map: Total doses administered per 100 people by country</p>
   <highcharts-chart
     [Highcharts]="Highcharts"
     [constructorType]="'mapChart'"
     [options]="worldMapChartOptions"
+    (chartInstance)="worldMapChart = $event"
   >
   </highcharts-chart>
 
   <hr />
-
-  <h2 class="section-title">Current Status of Vaccination by Country/Region</h2>
-
-  <div class="table-container">
+  <h2 id="vaccination_status_by_country" class="section-title">
+    <a href="#vaccination_status_by_country">Current Status of Vaccination by Country/Region</a>
+  </h2>
+  <ng-container
+    *ngTemplateOutlet="spinner; context: {svgWidth: '80%', svgColor: '#f3f3f3'}"
+  ></ng-container>
+  <div class="table-container" *ngIf="dataService.vaccinationFilteredList$ | async as countryList">
     <table class="shadow-2">
       <thead>
         <tr>
@@ -97,9 +133,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr
-          *ngFor="let country of dataService.vaccinationFilteredList$ | async; trackBy: trackByFn"
-        >
+        <tr *ngFor="let country of countryList; trackBy: trackByFn">
           <td class="white-space-nowrap">
             <figure>
               <img
@@ -138,12 +172,17 @@
     </div>
   </div>
 
-  <div *ngIf="vaccineProgressSelectedRegionSummary$ | async as summary">
-    <hr />
-    <h2 class="section-title">Vaccination Progress Over Time</h2>
+  <hr />
+  <h2 id="vaccination_progress_over_time" class="section-title">
+    <a href="#vaccination_progress_over_time"> Vaccination Progress Over Time </a>
+  </h2>
+  <ng-container
+    *ngTemplateOutlet="spinner; context: {svgWidth: '80%', svgColor: '#f3f3f3'}"
+  ></ng-container>
+  <div *ngIf="dataService.vaccineProgressSelectedRegionSummary$ | async as summary">
     <select
-      [ngModel]="vaccineProgressSelectedRegion$ | async"
-      (ngModelChange)="vaccineProgressSelectedRegion$.next($event)"
+      [ngModel]="dataService.vaccineProgressSelectedRegion$ | async"
+      (ngModelChange)="dataService.vaccineProgressSelectedRegion$.next($event)"
     >
       <option
         *ngFor="let region of dataService.vaccinationDataList$ | async"
@@ -153,7 +192,7 @@
       </option>
     </select>
     <p
-      class="section-title"
+      class="section-description"
       *ngIf="
         summary.latest?.people_vaccinated_per_hundred && summary.data?.length;
         else notEnoughData
@@ -176,25 +215,29 @@
       >.
     </p>
     <ng-template #notEnoughData>
-      <p class="section-title">
+      <p class="section-description">
         <i> There's not enough data available from {{ summary.country }}. </i>
       </p>
     </ng-template>
+    <highcharts-chart
+      (chartInstance)="countryWiseProgressChart = $event"
+      [Highcharts]="Highcharts"
+      [options]="countryWiseProgressChartOptions"
+    >
+    </highcharts-chart>
   </div>
 
-  <highcharts-chart
-    (chartInstance)="countryWiseProgressChart = $event"
-    [Highcharts]="Highcharts"
-    [options]="countryWiseProgressChartOptions"
-  >
-  </highcharts-chart>
-
-  <div *ngIf="projectedVaccineProgressSelectedRegionSummary$ | async as summary">
-    <hr />
-    <h2 class="section-title">Projected Vaccination Progress</h2>
+  <hr />
+  <h2 id="projected_vaccination_progress" class="section-title">
+    <a href="#projected_vaccination_progress">Projected Vaccination Progress</a>
+  </h2>
+  <ng-container
+    *ngTemplateOutlet="spinner; context: {svgWidth: '80%', svgColor: '#f3f3f3'}"
+  ></ng-container>
+  <div *ngIf="dataService.projectedVaccineProgressSelectedRegionSummary$ | async as summary">
     <select
-      [ngModel]="projectedVaccineProgressSelectedRegion$ | async"
-      (ngModelChange)="projectedVaccineProgressSelectedRegion$.next($event)"
+      [ngModel]="dataService.projectedVaccineProgressSelectedRegion$ | async"
+      (ngModelChange)="dataService.projectedVaccineProgressSelectedRegion$.next($event)"
     >
       <option
         *ngFor="let region of dataService.vaccinationDataList$ | async"
@@ -203,68 +246,114 @@
         {{ region.shortName || region.country }}
       </option>
     </select>
-    <p
-      class="section-title"
-      *ngIf="summary.projectedFullDose && summary.projectedOneDose; else notEnoughData"
+    <select
+      [ngModel]="dataService.projectedVaccineProgressPercentage$ | async"
+      (ngModelChange)="dataService.projectedVaccineProgressPercentage$.next(+$event)"
     >
-      With the current daily vaccination rate of 1st dose at
-      <b class="text-highlight">{{ summary.projectedOneDose.daily_vaccinations | number }}</b
-      >, the whole of
-      {{
-        summary.shortName || summary.country.endsWith('s') || summary.iso_code === 'OWID_WRL'
-          ? 'the'
-          : ''
-      }}
-      <b class="text-highlight">{{ summary.shortName || summary.country }}</b> is expected to get
-      vaccinated by
-      <b class="text-highlight">{{ summary.projectedOneDose.date | date: 'longDate' }}</b
-      >, and
-      <br />
-      <br />
-      With the current daily vaccination rate of full dose at
-      <b class="text-highlight">{{ summary.projectedFullDose.daily_vaccinations | number }}</b
-      >, the whole of
-      {{
-        summary.shortName || summary.country.endsWith('s') || summary.iso_code === 'OWID_WRL'
-          ? 'the'
-          : ''
-      }}
-      <b class="text-highlight">{{ summary.shortName || summary.country }}</b> is expected get fully
-      vaccinated by
-      <b class="text-highlight">{{ summary.projectedFullDose.date | date: 'longDate' }}</b
-      >.
-      <br />
-      <br />
-      <b *ngIf="isFullDoseHappeningBefore1Dose"
-        >Note: The full-dose vaccination is projected to complete even before the 1st dose
-        vaccination because the current daily rate of full-dose vaccination is greater than current
-        daily 1st-dose vaccination.</b
-      >
-    </p>
-    <ng-template #notEnoughData>
-      <p class="section-title">
-        <i> There's not enough data available from {{ summary.country }}. </i>
-      </p>
-    </ng-template>
-  </div>
+      <option value="50">50% population</option>
+      <option value="55">55% population</option>
+      <option value="60">60% population</option>
+      <option value="65">65% population</option>
+      <option value="70">70% population</option>
+      <option value="75">75% population</option>
+      <option value="80">80% population</option>
+      <option value="85">85% population</option>
+      <option value="90">90% population</option>
+      <option value="95">95% population</option>
+      <option value="100">100% population</option>
+    </select>
 
-  <highcharts-chart
-    (chartInstance)="projectedCountryWiseProgressChart = $event"
-    [Highcharts]="Highcharts"
-    [options]="projectedCountryWiseProgressChartOptions"
-  >
-  </highcharts-chart>
+    <ng-template #selectedPopulationSize>
+      <b
+        class="text-highlight"
+        *ngIf="dataService.projectedVaccineProgressPercentage$ | async as percent"
+      >
+        {{ percent === 100 ? 'the whole' : percent + '% population' }}
+      </b>
+    </ng-template>
+    <ng-template #regionName>
+      {{
+        summary.shortName || summary.country.endsWith('s') || summary.iso_code === 'OWID_WRL'
+          ? 'the'
+          : ''
+      }}
+      <b class="text-highlight">{{ summary.shortName || summary.country }}</b>
+    </ng-template>
+
+    <ng-container
+      *ngIf="summary.projectedFullDose && summary.projectedFirstDose; else noProjectionAvailable"
+    >
+      <p class="section-description">
+        With
+        <b class="text-highlight">{{ summary.projectedFirstDose.daily_vaccinations | number }}</b>
+        current daily vaccination rate of 1st dose,
+        <ng-container *ngTemplateOutlet="selectedPopulationSize"></ng-container> of
+        <ng-container *ngTemplateOutlet="regionName"></ng-container>
+        is expected to get vaccinated by
+        <b class="text-highlight">{{ summary.projectedFirstDose.date | date: 'longDate' }}</b
+        >, and
+      </p>
+
+      <p class="section-description">
+        With
+        <b class="text-highlight">{{ summary.projectedFullDose.daily_vaccinations | number }}</b>
+        current daily vaccination rate of full dose ,
+        <ng-container *ngTemplateOutlet="selectedPopulationSize"></ng-container> of
+        <ng-container *ngTemplateOutlet="regionName"></ng-container>
+        is expected to get fully vaccinated by
+        <b class="text-highlight">{{ summary.projectedFullDose.date | date: 'longDate' }}</b
+        >.
+      </p>
+
+      <p class="section-description" *ngIf="isFullDoseHappeningBefore1Dose">
+        <b>Note: </b
+        ><i
+          >The full-dose vaccination is projected to complete even before the 1st-dose vaccination,
+          this anomaly can occur because we only take most recent days' data into consideration to
+          calculate the daily rate; most definitely it'll get corrected over time.</i
+        >
+      </p>
+    </ng-container>
+    <ng-template #noProjectionAvailable>
+      <ng-container *ngIf="dataService.projectedVaccineProgressPercentage$ | async as percent">
+        <p class="section-description">
+          <span
+            *ngIf="
+              summary.latest?.people_vaccinated_per_hundred >= percent ||
+                summary.latest?.people_fully_vaccinated_per_hundred >= percent;
+              else notEnoughData
+            "
+          >
+            <span class="emoji">🎉</span>
+            <ng-container *ngTemplateOutlet="regionName"></ng-container> has already achieved
+            <b class="text-highlight">{{ percent }}%</b> vaccination.
+          </span>
+          <ng-template #notEnoughData>
+            <i> There's not enough data available from {{ summary.country }}. </i>
+          </ng-template>
+        </p>
+      </ng-container>
+    </ng-template>
+    <highcharts-chart
+      (chartInstance)="projectedCountryWiseProgressChart = $event"
+      [Highcharts]="Highcharts"
+      [options]="projectedCountryWiseProgressChartOptions"
+    >
+    </highcharts-chart>
+  </div>
 </main>
 
 <footer>
   <p>
     Copyright © 2020
-    <a href="https://github.com/dabalyan/" target="_blank" rel="noopener noreferrer">Ankit Singh</a>
+    <a href="https://github.com/dabalyan/" target="_blank" rel="noopener noreferrer"
+      ><b>Ankit Singh</b></a
+    >
   </p>
   <p>
     Raw Data Source:
     <a href="https://ourworldindata.org/" target="_blank" rel="noopener noreferrer"
-      >Our World in Data</a
+      ><b>Our World in Data</b></a
     >
   </p>
 </footer>

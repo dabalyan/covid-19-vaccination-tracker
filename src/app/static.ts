@@ -9,6 +9,11 @@ export const NameExchange = {
 export const Alpha3to2 = {
   OWID_EUN: 'EU',
   OWID_NCY: 'NY',
+  OWID_CYN: 'CY',
+  OWID_ENG: 'GB-ENG',
+  OWID_NIR: 'GB-NIR',
+  OWID_SCT: 'GB-SCT',
+  OWID_WLS: 'GB-WLS',
   AFG: 'AF',
   ALA: 'AX',
   ALB: 'AL',

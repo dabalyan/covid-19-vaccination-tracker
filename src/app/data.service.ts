@@ -12,16 +12,20 @@ export class DataService {
   readonly searchInput$ = new BehaviorSubject<string>('');
   readonly sortOrder$ = new BehaviorSubject<'asc' | 'desc'>('asc');
   readonly sortBy$ = new BehaviorSubject<SortByKey>('total_vaccinations');
+  private lastSortedBy: SortByKey;
+
   readonly vaccinationDataList$: Observable<VaccinationDataPerCountry[]> = timer(
     0,
     15 * 60 * 1000 // every 15 minutes
   ).pipe(
     switchMap(() => this.fetchData()),
-    switchMap(data => this.sortBy$.pipe(map(sortBy => this.sort(sortBy, data)))),
     shareReplay(1)
   );
+
   readonly vaccinationFilteredList$: Observable<VaccinationDataPerCountry[]> = combineLatest([
-    this.vaccinationDataList$,
+    this.vaccinationDataList$.pipe(
+      switchMap(data => this.sortBy$.pipe(map(sortBy => this.sortTableData(sortBy, data))))
+    ),
     this.searchInput$,
     this.maxTableEntries$,
   ]).pipe(
@@ -39,6 +43,7 @@ export class DataService {
     }),
     shareReplay(1)
   );
+
   readonly vaccinationDataDict$: Observable<
     Record<IsoCode, VaccinationDataPerCountry>
   > = this.vaccinationDataList$.pipe(
@@ -50,15 +55,47 @@ export class DataService {
     ),
     shareReplay(1)
   );
+
   readonly summary$: Observable<VaccinationDataEntry> = this.vaccinationDataDict$.pipe(
     map(dict => dict.OWID_WRL.latest)
   );
-  private lastSortedBy: SortByKey;
+
+  readonly vaccineProgressSelectedRegion$ = new BehaviorSubject<IsoCode>('OWID_WRL');
+  readonly vaccineProgressSelectedRegionSummary$ = combineLatest([
+    this.vaccineProgressSelectedRegion$,
+    this.vaccinationDataDict$,
+  ]).pipe(
+    map(([isoCode, dict]) => dict[isoCode]),
+    shareReplay(1)
+  );
+
+  readonly projectedVaccineProgressPercentage$ = new BehaviorSubject<number>(75);
+  readonly projectedVaccineProgressSelectedRegion$ = new BehaviorSubject<IsoCode>('OWID_WRL');
+  readonly projectedVaccineProgressSelectedRegionSummary$ = combineLatest([
+    this.projectedVaccineProgressSelectedRegion$,
+    this.projectedVaccineProgressPercentage$,
+    this.vaccinationDataDict$,
+  ]).pipe(
+    map(([isoCode, percent, dict]) => {
+      const country: VaccinationDataPerCountry = dict[isoCode];
+      if (
+        country.latest?.date &&
+        country.latest.people_vaccinated &&
+        country.latest.people_fully_vaccinated &&
+        country.latest.people_vaccinated_per_hundred < percent &&
+        country.latest.people_fully_vaccinated_per_hundred < percent
+      ) {
+        return this.generateVaccinationProgress(country, percent);
+      }
+      return country;
+    }),
+    shareReplay(1)
+  );
 
   constructor(private http: HttpClient) {}
 
   fetchData(): Observable<VaccinationDataPerCountry[]> {
-    const cache = isDevMode && localStorage.getItem('data');
+    const cache = isDevMode() && localStorage.getItem('data');
     return (cache
       ? of(JSON.parse(cache)).pipe(delay(0))
       : this.http.get<VaccinationDataPerCountry[]>(
@@ -72,17 +109,10 @@ export class DataService {
           country.alpha2 = Alpha3to2[country.iso_code];
           country.shortName = NameExchange[country.alpha2];
           country.imageUrl =
-            country.alpha2 && `https://www.countryflags.io/${country.alpha2}/flat/64.png`;
-
-          if (
-            country.latest?.date &&
-            country.latest.people_vaccinated &&
-            country.latest.people_fully_vaccinated
-          ) {
-            this.generateVaccinationProgress(country);
-          }
+            country.alpha2 &&
+            `https://raw.githubusercontent.com/hampusborgos/country-flags/master/png100px/${country.alpha2.toLowerCase()}.png`;
         });
-        if (isDevMode) {
+        if (isDevMode()) {
           localStorage.setItem('data', JSON.stringify(data));
         }
       })
@@ -111,14 +141,17 @@ export class DataService {
     }
   }
 
-  generateVaccinationProgress(country: VaccinationDataPerCountry): void {
+  generateVaccinationProgress(
+    country: VaccinationDataPerCountry,
+    percent: number
+  ): VaccinationDataPerCountry {
     const date = new Date(country.latest.date);
     const latestData = country.latest;
     const fewDaysBackData = this.findFewDaysOlderDataForTrend(country.data.slice(0, -1));
     const daysElapsed =
       (date.getTime() - new Date(fewDaysBackData?.date).getTime()) / 60 / 60 / 24 / 1000;
 
-    const oneDoseRate = fewDaysBackData
+    const firstDoseRate = fewDaysBackData
       ? Math.round((latestData.people_vaccinated - fewDaysBackData.people_vaccinated) / daysElapsed)
       : latestData.people_vaccinated;
     const fullDoseRate = fewDaysBackData
@@ -128,50 +161,51 @@ export class DataService {
         )
       : latestData.people_fully_vaccinated;
 
-    if (!oneDoseRate || !fullDoseRate || !isFinite(oneDoseRate) || !isFinite(fullDoseRate)) {
-      return;
+    if (!firstDoseRate || !fullDoseRate || !isFinite(firstDoseRate) || !isFinite(fullDoseRate)) {
+      return country;
     }
 
     const population = Math.round(
       (latestData.people_vaccinated * 100) / latestData.people_vaccinated_per_hundred
     );
-    const remainingOneDose = population - latestData.people_vaccinated;
-    const remainingFullDose = population - latestData.people_fully_vaccinated;
+    const populationToBeVaccinated = Math.round((population * percent) / 100);
+    const remainingFirstDose = populationToBeVaccinated - latestData.people_vaccinated;
+    const remainingFullDose = populationToBeVaccinated - latestData.people_fully_vaccinated;
 
-    const daysUntilAllOneDose = Math.round(remainingOneDose / oneDoseRate);
+    const daysUntilAllFirstDose = Math.round(remainingFirstDose / firstDoseRate);
     const daysUntilAllFullDose = Math.round(remainingFullDose / fullDoseRate);
 
-    const oneDoseTimeSpan = Math.round(daysUntilAllOneDose / 10);
+    const firstDoseTimeSpan = Math.round(daysUntilAllFirstDose / 10);
     const fullDoseTimeSpan = Math.round(daysUntilAllFullDose / 10);
 
-    const timesSpanUntilAllOneDose = Math.floor(daysUntilAllOneDose / oneDoseTimeSpan);
+    const timesSpanUntilAllFirstDose = Math.floor(daysUntilAllFirstDose / firstDoseTimeSpan);
     const timeSpansUntilAllFullDose = Math.floor(daysUntilAllFullDose / fullDoseTimeSpan);
 
-    const dateWhenAllOneDose = new Date(date.getTime());
-    dateWhenAllOneDose.setDate(date.getDate() + daysUntilAllOneDose);
+    const dateWhenAllFirstDose = new Date(date.getTime());
+    dateWhenAllFirstDose.setDate(date.getDate() + daysUntilAllFirstDose);
 
     const dateWhenAllFullDose = new Date(date.getTime());
     dateWhenAllFullDose.setDate(date.getDate() + daysUntilAllFullDose);
 
-    country.projectedDataOneDose = [];
-    country.projectedDataFullDose = [];
+    const projectedDataFirstDose = [];
+    const projectedDataFullDose = [];
 
-    [...Array(timesSpanUntilAllOneDose).keys()].forEach(i => {
+    [...Array(timesSpanUntilAllFirstDose).keys()].forEach(i => {
       const newDate = new Date(date.getTime());
-      newDate.setDate(date.getDate() + (i + 1) * oneDoseTimeSpan);
+      newDate.setDate(date.getDate() + (i + 1) * firstDoseTimeSpan);
 
-      if (newDate.getTime() >= dateWhenAllOneDose.getTime()) {
+      if (newDate.getTime() >= dateWhenAllFirstDose.getTime()) {
         return;
       }
 
       const peopleVaccinated =
-        latestData.people_vaccinated + oneDoseRate * (i + 1) * oneDoseTimeSpan;
+        latestData.people_vaccinated + firstDoseRate * (i + 1) * firstDoseTimeSpan;
 
-      country.projectedDataOneDose.push({
+      projectedDataFirstDose.push({
         date: newDate.toISOString().split('T')[0],
         people_vaccinated: peopleVaccinated,
         people_vaccinated_per_hundred: +((peopleVaccinated * 100) / population).toPrecision(2),
-        daily_vaccinations: oneDoseRate,
+        daily_vaccinations: firstDoseRate,
       });
     });
 
@@ -186,7 +220,7 @@ export class DataService {
       const peopleFullyVaccinated =
         latestData.people_fully_vaccinated + fullDoseRate * (i + 1) * fullDoseTimeSpan;
 
-      country.projectedDataFullDose.push({
+      projectedDataFullDose.push({
         date: newDate.toISOString().split('T')[0],
         people_fully_vaccinated: peopleFullyVaccinated,
         people_fully_vaccinated_per_hundred: +(
@@ -197,36 +231,39 @@ export class DataService {
       });
     });
 
-    country.projectedDataOneDose.push({
-      date: dateWhenAllOneDose.toISOString().split('T')[0],
-      people_vaccinated: population,
-      people_vaccinated_per_hundred: 100,
-      daily_vaccinations: oneDoseRate,
+    projectedDataFirstDose.push({
+      date: dateWhenAllFirstDose.toISOString().split('T')[0],
+      people_vaccinated: populationToBeVaccinated,
+      people_vaccinated_per_hundred: percent,
+      daily_vaccinations: firstDoseRate,
     });
 
-    country.projectedDataFullDose.push({
+    projectedDataFullDose.push({
       date: dateWhenAllFullDose.toISOString().split('T')[0],
-      people_fully_vaccinated: population,
-      people_fully_vaccinated_per_hundred: 100,
+      people_fully_vaccinated: populationToBeVaccinated,
+      people_fully_vaccinated_per_hundred: percent,
       daily_vaccinations: fullDoseRate,
     });
 
-    country.projectedDataOneDose.unshift(country.latest);
-    country.projectedDataFullDose.unshift(country.latest);
+    projectedDataFirstDose.unshift(country.latest);
+    projectedDataFullDose.unshift(country.latest);
 
-    country.projectedOneDose =
-      country.projectedDataOneDose[country.projectedDataOneDose.length - 1];
-    country.projectedFullDose =
-      country.projectedDataFullDose[country.projectedDataFullDose.length - 1];
+    return {
+      ...country,
+      projectedDataFirstDose,
+      projectedDataFullDose,
+      projectedFirstDose: projectedDataFirstDose[projectedDataFirstDose.length - 1],
+      projectedFullDose: projectedDataFullDose[projectedDataFullDose.length - 1],
+    };
   }
 
-  sort(by: SortByKey, data: VaccinationDataPerCountry[]): VaccinationDataPerCountry[] {
+  sortTableData(by: SortByKey, data: VaccinationDataPerCountry[]): VaccinationDataPerCountry[] {
     const desc =
       this.lastSortedBy !== by || (this.lastSortedBy === by && this.sortOrder$.value === 'asc');
     this.sortOrder$.next(desc ? 'desc' : 'asc');
     this.lastSortedBy = by;
 
-    return data.sort((a, b) => {
+    return [...data].sort((a, b) => {
       if (a.iso_code === 'OWID_WRL') {
         return -1;
       }
