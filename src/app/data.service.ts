@@ -1,7 +1,7 @@
 import {Injectable, isDevMode} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {BehaviorSubject, combineLatest, Observable, of, timer} from 'rxjs';
-import {delay, map, shareReplay, switchMap, tap} from 'rxjs/operators';
+import {delay, map, shareReplay, switchMap} from 'rxjs/operators';
 import {Alpha3to2, NameExchange} from './static';
 
 type SortByKey = 'country' | keyof VaccinationDataEntry;
@@ -10,9 +10,18 @@ type SortByKey = 'country' | keyof VaccinationDataEntry;
 export class DataService {
   readonly maxTableEntries$ = new BehaviorSubject<boolean>(false);
   readonly searchInput$ = new BehaviorSubject<string>('');
-  readonly sortOrder$ = new BehaviorSubject<'asc' | 'desc'>('asc');
-  readonly sortBy$ = new BehaviorSubject<SortByKey>('total_vaccinations');
+
   private lastSortedBy: SortByKey;
+  private lastSortedDesc: boolean;
+  readonly sortBy$ = new BehaviorSubject<SortByKey>('total_vaccinations');
+  readonly sortDesc$: Observable<boolean> = this.sortBy$.pipe(
+    map(sortBy => {
+      const desc: boolean = this.lastSortedBy !== sortBy || !this.lastSortedDesc;
+      this.lastSortedBy = sortBy;
+      return (this.lastSortedDesc = desc);
+    }),
+    shareReplay(1)
+  );
 
   readonly vaccinationDataList$: Observable<VaccinationDataPerCountry[]> = timer(
     0,
@@ -24,7 +33,7 @@ export class DataService {
 
   readonly vaccinationFilteredList$: Observable<VaccinationDataPerCountry[]> = combineLatest([
     this.vaccinationDataList$.pipe(
-      switchMap(data => this.sortBy$.pipe(map(sortBy => this.sortTableData(sortBy, data))))
+      switchMap(data => this.sortDesc$.pipe(map(desc => this.sortTableData(desc, data))))
     ),
     this.searchInput$,
     this.maxTableEntries$,
@@ -102,7 +111,7 @@ export class DataService {
           'https://covid.ourworldindata.org/data/vaccinations/vaccinations.json'
         )
     ).pipe(
-      map(data => {
+      map((data: VaccinationDataPerCountry[]) => {
         data = data.filter(country => {
           if (
             country.iso_code !== 'OWID_WRL' &&
@@ -115,6 +124,13 @@ export class DataService {
           country.date = new Date(country.latest?.date).toLocaleDateString();
           country.alpha2 = Alpha3to2[country.iso_code];
           country.shortName = NameExchange[country.alpha2];
+          country.population =
+            (country.latest?.people_vaccinated &&
+              (country.latest.people_vaccinated * 100) /
+                country.latest.people_vaccinated_per_hundred) ||
+            (country.latest?.people_fully_vaccinated &&
+              (country.latest.people_fully_vaccinated * 100) /
+                country.latest.people_fully_vaccinated_per_hundred);
           country.imageUrl =
             country.alpha2 &&
             `https://raw.githubusercontent.com/hampusborgos/country-flags/master/png100px/${country.alpha2.toLowerCase()}.png`;
@@ -174,9 +190,7 @@ export class DataService {
       return country;
     }
 
-    const population = Math.round(
-      (latestData.people_vaccinated * 100) / latestData.people_vaccinated_per_hundred
-    );
+    const population = country.population;
     const populationToBeVaccinated = Math.round((population * percent) / 100);
     const remainingFirstDose = populationToBeVaccinated - latestData.people_vaccinated;
     const remainingFullDose = populationToBeVaccinated - latestData.people_fully_vaccinated;
@@ -184,8 +198,17 @@ export class DataService {
     const daysUntilAllFirstDose = Math.round(remainingFirstDose / firstDoseRate);
     const daysUntilAllFullDose = Math.round(remainingFullDose / fullDoseRate);
 
-    const firstDoseTimeSpan = Math.round(daysUntilAllFirstDose / 10);
-    const fullDoseTimeSpan = Math.round(daysUntilAllFullDose / 10);
+    if (
+      !daysUntilAllFirstDose ||
+      !daysUntilAllFullDose ||
+      !isFinite(daysUntilAllFirstDose) ||
+      !isFinite(daysUntilAllFullDose)
+    ) {
+      return country;
+    }
+
+    const firstDoseTimeSpan = Math.round(daysUntilAllFirstDose / 10) || daysUntilAllFirstDose;
+    const fullDoseTimeSpan = Math.round(daysUntilAllFullDose / 10) || daysUntilAllFullDose;
 
     const timesSpanUntilAllFirstDose = Math.floor(daysUntilAllFirstDose / firstDoseTimeSpan);
     const timeSpansUntilAllFullDose = Math.floor(daysUntilAllFullDose / fullDoseTimeSpan);
@@ -266,19 +289,10 @@ export class DataService {
     };
   }
 
-  sortTableData(by: SortByKey, data: VaccinationDataPerCountry[]): VaccinationDataPerCountry[] {
-    const desc =
-      this.lastSortedBy !== by || (this.lastSortedBy === by && this.sortOrder$.value === 'asc');
-    this.sortOrder$.next(desc ? 'desc' : 'asc');
-    this.lastSortedBy = by;
+  sortTableData(desc: boolean, data: VaccinationDataPerCountry[]): VaccinationDataPerCountry[] {
+    const by = this.sortBy$.value;
 
-    return [...data].sort((a, b) => {
-      if (a.iso_code === 'OWID_WRL') {
-        return -1;
-      }
-      if (b.iso_code === 'OWID_WRL') {
-        return 0;
-      }
+    const sorted = [...data].sort((a, b) => {
       if (by === 'country') {
         const nameA = a.country.toUpperCase();
         const nameB = b.country.toUpperCase();
@@ -289,5 +303,13 @@ export class DataService {
       // @ts-ignore
       return desc ? numB - numA : numA - numB;
     });
+
+    const world = sorted.splice(
+      sorted.findIndex(country => country.iso_code === 'OWID_WRL'),
+      1
+    )[0];
+    sorted.unshift(world);
+
+    return sorted;
   }
 }

@@ -26,6 +26,18 @@
   </svg>
 </ng-template>
 
+<div class="landscape-suggestion" #suggestionEl>
+  <p>
+    For best experience please consider using your device in landscape mode.
+    <br />
+    <small>
+      Unfortunately, the interactive charts on this site don't really work that well on small
+      devices.
+    </small>
+  </p>
+  <button class="btn" (click)="allowPortraitMode(suggestionEl)">No, I don't think I will</button>
+</div>
+
 <nav>
   <div class="brand"><img src="assets/logo.svg" /> COVID-19 Vaccination Tracker</div>
 </nav>
@@ -41,6 +53,10 @@
     </ng-container>
   </h1>
   <h3 *ngIf="dataService.summary$ | async as summary">
+    <div class="live">
+      <div></div>
+      <div></div>
+    </div>
     Updated on: {{ summary.date | date: 'longDate' }}
   </h3>
   <hr />
@@ -82,7 +98,7 @@
           <th class="text-center" colspan="2">Fully Vaccinated</th>
           <th></th>
         </tr>
-        <tr [attr.data-sort-order]="dataService.sortOrder$ | async">
+        <tr [attr.data-sort-order]="(dataService.sortDesc$ | async) ? 'desc' : 'asc'">
           <th
             (click)="dataService.sortBy$.next('country')"
             [class.active]="(dataService.sortBy$ | async) === 'country'"
@@ -137,7 +153,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let country of countryList; trackBy: trackByFn">
+        <tr *ngFor="let country of countryList">
           <td class="white-space-nowrap">
             <figure>
               <img
@@ -256,6 +272,10 @@
       [ngModel]="dataService.projectedVaccineProgressPercentage$ | async"
       (ngModelChange)="dataService.projectedVaccineProgressPercentage$.next(+$event)"
     >
+      <option value="30">30% population</option>
+      <option value="35">35% population</option>
+      <option value="40">40% population</option>
+      <option value="45">45% population</option>
       <option value="50">50% population</option>
       <option value="55">55% population</option>
       <option value="60">60% population</option>

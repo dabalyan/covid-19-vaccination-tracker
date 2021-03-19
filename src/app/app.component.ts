@@ -1,8 +1,8 @@
-import {Component, OnInit} from '@angular/core';
+import {Component, OnInit, ViewEncapsulation} from '@angular/core';
 import {DataService} from './data.service';
 import * as Highcharts from 'highcharts/highmaps';
 import worldMap from '@highcharts/map-collection/custom/world.geo.json';
-import {localiseDate} from './utils';
+import {kmb, localiseDate} from './utils';
 
 const splineAreaChartOptions = (sharedTooltip = true, yAxisMax = null): Highcharts.Options => ({
   title: null,
@@ -25,6 +25,9 @@ const splineAreaChartOptions = (sharedTooltip = true, yAxisMax = null): Highchar
   plotOptions: {
     areaspline: {
       fillOpacity: 0.5,
+      marker: {enabled: false},
+    },
+    line: {
       marker: {enabled: false},
     },
   },
@@ -68,6 +71,7 @@ const splineAreaChartOptions = (sharedTooltip = true, yAxisMax = null): Highchar
     },
   },
   tooltip: {
+    hideDelay: 0,
     backgroundColor: 'rgba(255, 255, 255, .9)',
     borderColor: '#000',
     borderRadius: 8,
@@ -75,13 +79,24 @@ const splineAreaChartOptions = (sharedTooltip = true, yAxisMax = null): Highchar
     useHTML: true,
     // tslint:disable-next-line:only-arrow-functions typedef
     formatter() {
-      const firstDoseMsg = `<h1>${(sharedTooltip ? this.points[0]?.y : this.y) ?? '-'}%</h1>
+      const s1: any = sharedTooltip
+        ? this.points.find((p: any) => p.point.id === 'peopleVaccinatedPer100')
+        : this;
+      const s2: any = sharedTooltip
+        ? this.points.find((p: any) => p.point.id === 'fullyVaccinatedPer100')
+        : this;
+      const s3: any = sharedTooltip
+        ? this.points.find((p: any) => p.point.id === 'dailyVaccinations')
+        : this;
+      const firstDoseMsg = `<h1>${s1?.y ?? '-'}%</h1>
 <h3>of population got at least 1 shot.</h3>`;
-      const fullDoseMsg = `<h1>${(sharedTooltip ? this.points[1]?.y : this.y) ?? '-'}%</h1>
+      const fullDoseMsg = `<h1>${s2?.y ?? '-'}%</h1>
 <h3>of population got fully vaccinated.</h3>`;
+      const dailyVaccinationsMsg = `<h1>${kmb(s3?.point.dailyVaccinations) ?? '-'}</h1>
+<h3>daily average doses.</h3>`;
       return (
         `<h2>${localiseDate(this.x as any)}</h2>` +
-        ((sharedTooltip && firstDoseMsg + fullDoseMsg) ||
+        ((sharedTooltip && firstDoseMsg + fullDoseMsg + dailyVaccinationsMsg) ||
           ((this.series.userOptions as any).projectionType === 'firstDose' && firstDoseMsg) ||
           fullDoseMsg)
       );
@@ -93,6 +108,7 @@ const splineAreaChartOptions = (sharedTooltip = true, yAxisMax = null): Highchar
   selector: 'app-root',
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss'],
+  encapsulation: ViewEncapsulation.None,
 })
 export class AppComponent implements OnInit {
   Highcharts: typeof Highcharts = Highcharts;
@@ -102,6 +118,7 @@ export class AppComponent implements OnInit {
     title: null,
     credits: {enabled: false},
     tooltip: {
+      hideDelay: 0,
       backgroundColor: 'rgba(255, 255, 255, .9)',
       borderColor: '#000',
       borderRadius: 8,
@@ -140,6 +157,8 @@ export class AppComponent implements OnInit {
     },
     mapNavigation: {
       enabled: false,
+      enableButtons: true,
+      enableTouchZoom: true,
       buttonOptions: {
         alignTo: 'spacingBox',
       },
@@ -180,9 +199,11 @@ export class AppComponent implements OnInit {
 
   countryWiseProgressChart: Highcharts.Chart;
   projectedCountryWiseProgressChart: Highcharts.Chart;
+  dailyVaccinationsChart: Highcharts.Chart;
 
   countryWiseProgressChartOptions: Highcharts.Options = splineAreaChartOptions();
   projectedCountryWiseProgressChartOptions: Highcharts.Options = splineAreaChartOptions(false, 100);
+  dailyVaccinationsChartOptions: Highcharts.Options = splineAreaChartOptions(false);
 
   isFullDoseHappeningBefore1Dose: boolean;
 
@@ -205,47 +226,66 @@ export class AppComponent implements OnInit {
       }
     });
 
-    this.dataService.vaccineProgressSelectedRegionSummary$.subscribe(data => {
+    this.dataService.vaccineProgressSelectedRegionSummary$.subscribe(country => {
       if (this.countryWiseProgressChart) {
         while (this.countryWiseProgressChart.series.length > 0) {
           this.countryWiseProgressChart.series[0].remove(true);
         }
       }
 
-      const peopleVaccinatedPer100series = {
+      const peopleVaccinatedPer100Series = {
         name: '% of Population Vaccinated',
         data: [],
         color: '#0bd282',
       };
-      const fullyVaccinatedPer100series = {
+      const fullyVaccinatedPer100Series = {
         name: '% of Population Fully Vaccinated',
         data: [],
         color: '#004f30',
       };
+      const dailyVaccinationsSeries = {
+        type: 'line',
+        name: 'Average Daily Vaccinations',
+        data: [],
+        color: '#234de2',
+      };
 
-      data.data.forEach(entry => {
-        peopleVaccinatedPer100series.data.push([
-          new Date(entry.date).getTime(),
-          entry.people_vaccinated_per_hundred,
-        ]);
-        fullyVaccinatedPer100series.data.push([
-          new Date(entry.date).getTime(),
-          entry.people_fully_vaccinated_per_hundred,
-        ]);
+      country.data.forEach(entry => {
+        const timestamp = new Date(entry.date).getTime();
+        peopleVaccinatedPer100Series.data.push({
+          id: 'peopleVaccinatedPer100',
+          x: timestamp,
+          y: entry.people_vaccinated_per_hundred,
+        });
+        fullyVaccinatedPer100Series.data.push({
+          id: 'fullyVaccinatedPer100',
+          x: timestamp,
+          y: entry.people_fully_vaccinated_per_hundred,
+        });
+        const dailyVaccinationsPer100 = (entry.daily_vaccinations * 100) / country.population;
+        dailyVaccinationsSeries.data.push({
+          id: 'dailyVaccinations',
+          x: timestamp,
+          y: isFinite(dailyVaccinationsPer100) ? +dailyVaccinationsPer100.toFixed(2) : null,
+          dailyVaccinations: entry.daily_vaccinations,
+          data: country,
+        });
       });
 
       if (this.countryWiseProgressChart) {
-        this.countryWiseProgressChart.addSeries(peopleVaccinatedPer100series as any);
-        this.countryWiseProgressChart.addSeries(fullyVaccinatedPer100series as any);
+        this.countryWiseProgressChart.addSeries(peopleVaccinatedPer100Series as any);
+        this.countryWiseProgressChart.addSeries(fullyVaccinatedPer100Series as any);
+        this.countryWiseProgressChart.addSeries(dailyVaccinationsSeries as any);
       } else {
         this.countryWiseProgressChartOptions.series = [
-          peopleVaccinatedPer100series,
-          fullyVaccinatedPer100series,
+          peopleVaccinatedPer100Series,
+          fullyVaccinatedPer100Series,
+          dailyVaccinationsSeries,
         ] as any;
       }
     });
 
-    this.dataService.projectedVaccineProgressSelectedRegionSummary$.subscribe(data => {
+    this.dataService.projectedVaccineProgressSelectedRegionSummary$.subscribe(country => {
       if (this.projectedCountryWiseProgressChart) {
         while (this.projectedCountryWiseProgressChart.series.length > 0) {
           this.projectedCountryWiseProgressChart.series[0].remove(true);
@@ -265,16 +305,16 @@ export class AppComponent implements OnInit {
         projectionType: 'fullDose',
       };
 
-      if (data.projectedDataFirstDose) {
-        data.projectedDataFirstDose.forEach(entry => {
+      if (country.projectedDataFirstDose) {
+        country.projectedDataFirstDose.forEach(entry => {
           projectedPeopleVaccinatedPer100series.data.push([
             new Date(entry.date).getTime(),
             entry.people_vaccinated_per_hundred,
           ]);
         });
       }
-      if (data.projectedDataFullDose) {
-        data.projectedDataFullDose.forEach(entry => {
+      if (country.projectedDataFullDose) {
+        country.projectedDataFullDose.forEach(entry => {
           projectedFullyVaccinatedPer100series.data.push([
             new Date(entry.date).getTime(),
             entry.people_fully_vaccinated_per_hundred,
@@ -297,12 +337,13 @@ export class AppComponent implements OnInit {
       }
 
       this.isFullDoseHappeningBefore1Dose =
-        new Date(data.projectedFullDose?.date).getTime() <
-        new Date(data.projectedFirstDose?.date).getTime();
+        new Date(country.projectedFullDose?.date).getTime() <
+        new Date(country.projectedFirstDose?.date).getTime();
     });
   }
 
-  trackByFn(country: VaccinationDataPerCountry): IsoCode {
-    return country.iso_code;
+  allowPortraitMode(suggestionEl: HTMLElement): void {
+    suggestionEl.style.display = 'none';
+    document.body.style.overflowY = 'auto';
   }
 }

@@ -1,5 +1,37 @@
 @import 'src/styles/variables';
 $borderColor: #bebebe;
+$brandColor: #0ac682;
+
+.landscape-suggestion {
+  display: none;
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  bottom: 0;
+  padding: 4px;
+  background: transparentize($dayBg, 0.03);
+  backdrop-filter: blur(1px);
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: center;
+  text-align: center;
+  z-index: 999;
+
+  p {
+    margin: 0;
+    font-weight: 400;
+    font-size: 2em;
+  }
+
+  @media (orientation: portrait) and (max-width: 800px) {
+    display: flex;
+
+    @at-root body {
+      overflow: hidden;
+    }
+  }
+}
 
 :host {
   display: block;
@@ -48,6 +80,44 @@ hr {
 
   @media all and (max-width: 800px) {
     display: flex;
+    &:after {
+      display: none;
+    }
+  }
+}
+
+.live {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  width: 12px;
+  height: 12px;
+
+  > div {
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    border: 2px solid transparent;
+    border-radius: 100%;
+    position: absolute;
+
+    &:nth-child(1) {
+      background: $brandColor;
+      animation: live 1s infinite alternate-reverse cubic-bezier(0.83, -0.02, 0.24, 1.05);
+    }
+    &:nth-child(2) {
+      border-color: $brandColor;
+    }
+  }
+}
+
+@keyframes live {
+  0% {
+    transform: scale(0.4);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 
@@ -84,7 +154,6 @@ h6,
 p {
   margin: auto;
   max-width: 600px;
-  text-align: center;
 }
 
 .text-highlight {
@@ -93,6 +162,7 @@ p {
 
 .section-title {
   margin: 12px auto;
+  text-align: center;
 
   @at-root h2#{&} {
     padding: 12px 0;
@@ -119,6 +189,7 @@ p {
 .section-description {
   margin: 12px auto;
   font-size: 1.3rem;
+  text-align: center;
 }
 
 highcharts-chart {
@@ -181,6 +252,8 @@ table {
     &:not(:last-child) td {
       border-bottom: 1px solid $borderColor;
     }
+
+    animation: 0.8s verticalFlip forwards;
   }
 
   th {
@@ -265,5 +338,16 @@ footer {
     &:hover {
       text-decoration: underline;
     }
+  }
+}
+
+@keyframes verticalFlip {
+  from {
+    transform: rotateX(90deg);
+    opacity: 0;
+  }
+  to {
+    transform: rotateX(0);
+    opacity: 1;
   }
 }
