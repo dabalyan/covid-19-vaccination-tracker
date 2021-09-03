@@ -258,8 +258,8 @@
   ></ng-container>
   <div *ngIf="dataService.projectedVaccineProgressSelectedRegionSummary$ | async as summary">
     <select
-      [ngModel]="dataService.projectedVaccineProgressSelectedRegion$ | async"
-      (ngModelChange)="dataService.projectedVaccineProgressSelectedRegion$.next($event)"
+      [ngModel]="dataService.vaccineProgressSelectedRegion$ | async"
+      (ngModelChange)="dataService.vaccineProgressSelectedRegion$.next($event)"
     >
       <option
         *ngFor="let region of dataService.vaccinationDataList$ | async"
@@ -307,9 +307,17 @@
     </ng-template>
 
     <ng-container
-      *ngIf="summary.projectedFullDose && summary.projectedFirstDose; else noProjectionAvailable"
+      *ngIf="
+        summary.projectedFullDose &&
+          summary.projectedFirstDose &&
+          dataService.projectedVaccineProgressPercentage$ | async as percent;
+        else noProjectionAvailable
+      "
     >
-      <p class="section-description">
+      <p
+        class="section-description"
+        *ngIf="summary.latest?.people_vaccinated_per_hundred < percent"
+      >
         With
         <b class="text-highlight">{{ summary.projectedFirstDose.daily_vaccinations | number }}</b>
         current daily vaccination rate of 1st dose,
@@ -320,7 +328,10 @@
         >, and
       </p>
 
-      <p class="section-description">
+      <p
+        class="section-description"
+        *ngIf="summary.latest?.people_fully_vaccinated_per_hundred < percent"
+      >
         With
         <b class="text-highlight">{{ summary.projectedFullDose.daily_vaccinations | number }}</b>
         current daily vaccination rate of full dose ,
@@ -351,8 +362,8 @@
             "
           >
             <span class="emoji">🎉</span>
-            <ng-container *ngTemplateOutlet="regionName"></ng-container> has already achieved
-            <b class="text-highlight">{{ percent }}%</b> vaccination.
+            <ng-container *ngTemplateOutlet="regionName"></ng-container> has already vaccinated
+            <b class="text-highlight">{{ percent }}%</b> of the population.
           </span>
           <ng-template #notEnoughData>
             <i> There's not enough data available from {{ summary.country }}. </i>

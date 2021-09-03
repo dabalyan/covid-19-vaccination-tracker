@@ -27,7 +27,7 @@ const splineAreaChartOptions = (sharedTooltip = true, yAxisMax = null): Highchar
       fillOpacity: 0.5,
       marker: {enabled: false},
     },
-    line: {
+    spline: {
       marker: {enabled: false},
     },
   },
@@ -88,11 +88,17 @@ const splineAreaChartOptions = (sharedTooltip = true, yAxisMax = null): Highchar
       const s3: any = sharedTooltip
         ? this.points.find((p: any) => p.point.id === 'dailyVaccinations')
         : this;
-      const firstDoseMsg = `<h1>${s1?.y ?? '-'}%</h1>
+      const firstDoseMsg = !s1
+        ? ''
+        : `<h1>${s1?.y ?? '-'}%</h1>
 <h3>of population got at least 1 shot.</h3>`;
-      const fullDoseMsg = `<h1>${s2?.y ?? '-'}%</h1>
+      const fullDoseMsg = !s2
+        ? ''
+        : `<h1>${s2?.y ?? '-'}%</h1>
 <h3>of population got fully vaccinated.</h3>`;
-      const dailyVaccinationsMsg = `<h1>${kmb(s3?.point.dailyVaccinations) ?? '-'}</h1>
+      const dailyVaccinationsMsg = !s3
+        ? ''
+        : `<h1>${kmb(s3?.point.dailyVaccinations) ?? '-'}</h1>
 <h3>daily average doses.</h3>`;
       return (
         `<h2>${localiseDate(this.x as any)}</h2>` +
@@ -166,7 +172,7 @@ export class AppComponent implements OnInit {
     legend: {
       enabled: true,
     },
-    colors: ['#57b893'],
+    colors: ['#f5fffa'],
     colorAxis: {
       max: 100,
       stops: [
@@ -237,17 +243,26 @@ export class AppComponent implements OnInit {
         name: '% of Population Vaccinated',
         data: [],
         color: '#0bd282',
+        marker: {
+          symbol: 'circle',
+        },
       };
       const fullyVaccinatedPer100Series = {
         name: '% of Population Fully Vaccinated',
         data: [],
         color: '#004f30',
+        marker: {
+          symbol: 'circle',
+        },
       };
       const dailyVaccinationsSeries = {
-        type: 'line',
-        name: 'Average Daily Vaccinations',
+        type: 'spline',
+        name: 'Daily Average Doses',
         data: [],
         color: '#234de2',
+        marker: {
+          symbol: 'circle',
+        },
       };
 
       country.data.forEach(entry => {
@@ -297,12 +312,18 @@ export class AppComponent implements OnInit {
         data: [],
         color: '#0bd282',
         projectionType: 'firstDose',
+        marker: {
+          symbol: 'circle',
+        },
       };
       const projectedFullyVaccinatedPer100series = {
         name: '% of Population Fully Vaccinated',
         data: [],
         color: '#004f30',
         projectionType: 'fullDose',
+        marker: {
+          symbol: 'circle',
+        },
       };
 
       if (country.projectedDataFirstDose) {

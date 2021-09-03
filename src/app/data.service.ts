@@ -10,19 +10,7 @@ type SortByKey = 'country' | keyof VaccinationDataEntry;
 export class DataService {
   readonly maxTableEntries$ = new BehaviorSubject<boolean>(false);
   readonly searchInput$ = new BehaviorSubject<string>('');
-
-  private lastSortedBy: SortByKey;
-  private lastSortedDesc: boolean;
   readonly sortBy$ = new BehaviorSubject<SortByKey>('total_vaccinations');
-  readonly sortDesc$: Observable<boolean> = this.sortBy$.pipe(
-    map(sortBy => {
-      const desc: boolean = this.lastSortedBy !== sortBy || !this.lastSortedDesc;
-      this.lastSortedBy = sortBy;
-      return (this.lastSortedDesc = desc);
-    }),
-    shareReplay(1)
-  );
-
   readonly vaccinationDataList$: Observable<VaccinationDataPerCountry[]> = timer(
     0,
     15 * 60 * 1000 // every 15 minutes
@@ -30,29 +18,6 @@ export class DataService {
     switchMap(() => this.fetchData()),
     shareReplay(1)
   );
-
-  readonly vaccinationFilteredList$: Observable<VaccinationDataPerCountry[]> = combineLatest([
-    this.vaccinationDataList$.pipe(
-      switchMap(data => this.sortDesc$.pipe(map(desc => this.sortTableData(desc, data))))
-    ),
-    this.searchInput$,
-    this.maxTableEntries$,
-  ]).pipe(
-    map(([data, search, max]) => {
-      const searched = search
-        ? data.filter(
-            item =>
-              item.iso_code === 'OWID_WRL' ||
-              item.country.toUpperCase().includes(search) ||
-              item.alpha2?.toUpperCase().includes(search) ||
-              item.shortName?.toUpperCase().includes(search)
-          )
-        : data;
-      return max ? searched : searched.slice(0, 12);
-    }),
-    shareReplay(1)
-  );
-
   readonly vaccinationDataDict$: Observable<
     Record<IsoCode, VaccinationDataPerCountry>
   > = this.vaccinationDataList$.pipe(
@@ -79,9 +44,8 @@ export class DataService {
   );
 
   readonly projectedVaccineProgressPercentage$ = new BehaviorSubject<number>(75);
-  readonly projectedVaccineProgressSelectedRegion$ = new BehaviorSubject<IsoCode>('OWID_WRL');
   readonly projectedVaccineProgressSelectedRegionSummary$ = combineLatest([
-    this.projectedVaccineProgressSelectedRegion$,
+    this.vaccineProgressSelectedRegion$,
     this.projectedVaccineProgressPercentage$,
     this.vaccinationDataDict$,
   ]).pipe(
@@ -91,12 +55,43 @@ export class DataService {
         country.latest?.date &&
         country.latest.people_vaccinated &&
         country.latest.people_fully_vaccinated &&
-        country.latest.people_vaccinated_per_hundred < percent &&
-        country.latest.people_fully_vaccinated_per_hundred < percent
+        (country.latest.people_vaccinated_per_hundred < percent ||
+          country.latest.people_fully_vaccinated_per_hundred < percent)
       ) {
         return this.generateVaccinationProgress(country, percent);
       }
       return country;
+    }),
+    shareReplay(1)
+  );
+  private lastSortedBy: SortByKey;
+  private lastSortedDesc: boolean;
+  readonly sortDesc$: Observable<boolean> = this.sortBy$.pipe(
+    map(sortBy => {
+      const desc: boolean = this.lastSortedBy !== sortBy || !this.lastSortedDesc;
+      this.lastSortedBy = sortBy;
+      return (this.lastSortedDesc = desc);
+    }),
+    shareReplay(1)
+  );
+  readonly vaccinationFilteredList$: Observable<VaccinationDataPerCountry[]> = combineLatest([
+    this.vaccinationDataList$.pipe(
+      switchMap(data => this.sortDesc$.pipe(map(desc => this.sortTableData(desc, data))))
+    ),
+    this.searchInput$,
+    this.maxTableEntries$,
+  ]).pipe(
+    map(([data, search, max]) => {
+      const searched = search
+        ? data.filter(
+            item =>
+              item.iso_code === 'OWID_WRL' ||
+              item.country.toUpperCase().includes(search) ||
+              item.alpha2?.toUpperCase().includes(search) ||
+              item.shortName?.toUpperCase().includes(search)
+          )
+        : data;
+      return max ? searched : searched.slice(0, 12);
     }),
     shareReplay(1)
   );
@@ -108,7 +103,7 @@ export class DataService {
     return (cache
       ? of(JSON.parse(cache)).pipe(delay(0))
       : this.http.get<VaccinationDataPerCountry[]>(
-          'https://covid.ourworldindata.org/data/vaccinations/vaccinations.json'
+          'https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/vaccinations/vaccinations.json'
         )
     ).pipe(
       map((data: VaccinationDataPerCountry[]) => {
@@ -137,7 +132,7 @@ export class DataService {
           return true;
         });
         if (isDevMode()) {
-          localStorage.setItem('data', JSON.stringify(data));
+          // localStorage.setItem('data', JSON.stringify(data));
         }
         return data;
       })
@@ -195,20 +190,28 @@ export class DataService {
     const remainingFirstDose = populationToBeVaccinated - latestData.people_vaccinated;
     const remainingFullDose = populationToBeVaccinated - latestData.people_fully_vaccinated;
 
-    const daysUntilAllFirstDose = Math.round(remainingFirstDose / firstDoseRate);
-    const daysUntilAllFullDose = Math.round(remainingFullDose / fullDoseRate);
+    const daysUntilAllFirstDose = Math.max(0, Math.ceil(remainingFirstDose / firstDoseRate));
+    let daysUntilAllFullDose = Math.max(0, Math.ceil(remainingFullDose / fullDoseRate));
+
+    if (daysUntilAllFirstDose < daysUntilAllFullDose) {
+      const remainingFullDoseAfterFirstIsDone =
+        remainingFullDose - daysUntilAllFirstDose * fullDoseRate;
+      daysUntilAllFullDose =
+        daysUntilAllFirstDose +
+        Math.ceil(remainingFullDoseAfterFirstIsDone / (firstDoseRate + fullDoseRate));
+    }
 
     if (
-      !daysUntilAllFirstDose ||
-      !daysUntilAllFullDose ||
+      // !daysUntilAllFirstDose ||
+      // !daysUntilAllFullDose ||
       !isFinite(daysUntilAllFirstDose) ||
       !isFinite(daysUntilAllFullDose)
     ) {
       return country;
     }
 
-    const firstDoseTimeSpan = Math.round(daysUntilAllFirstDose / 10) || daysUntilAllFirstDose;
-    const fullDoseTimeSpan = Math.round(daysUntilAllFullDose / 10) || daysUntilAllFullDose;
+    const firstDoseTimeSpan = 1;
+    const fullDoseTimeSpan = 1;
 
     const timesSpanUntilAllFirstDose = Math.floor(daysUntilAllFirstDose / firstDoseTimeSpan);
     const timeSpansUntilAllFullDose = Math.floor(daysUntilAllFullDose / fullDoseTimeSpan);
@@ -226,7 +229,7 @@ export class DataService {
       const newDate = new Date(date.getTime());
       newDate.setDate(date.getDate() + (i + 1) * firstDoseTimeSpan);
 
-      if (newDate.getTime() >= dateWhenAllFirstDose.getTime()) {
+      if (newDate.getTime() > dateWhenAllFirstDose.getTime()) {
         return;
       }
 
@@ -236,7 +239,7 @@ export class DataService {
       projectedDataFirstDose.push({
         date: newDate.toISOString().split('T')[0],
         people_vaccinated: peopleVaccinated,
-        people_vaccinated_per_hundred: +((peopleVaccinated * 100) / population).toPrecision(2),
+        people_vaccinated_per_hundred: +((peopleVaccinated * 100) / population).toFixed(2),
         daily_vaccinations: firstDoseRate,
       });
     });
@@ -245,37 +248,46 @@ export class DataService {
       const newDate = new Date(date.getTime());
       newDate.setDate(date.getDate() + (i + 1) * fullDoseTimeSpan);
 
-      if (newDate.getTime() >= dateWhenAllFullDose.getTime()) {
+      const isFirstDoseDone = dateWhenAllFirstDose.getTime() < newDate.getTime();
+
+      if (newDate.getTime() > dateWhenAllFullDose.getTime()) {
         return;
       }
 
+      const dailyVaccination = (isFirstDoseDone ? firstDoseRate : 0) + fullDoseRate;
       const peopleFullyVaccinated =
-        latestData.people_fully_vaccinated + fullDoseRate * (i + 1) * fullDoseTimeSpan;
+        (i
+          ? projectedDataFullDose[projectedDataFullDose.length - 1].people_fully_vaccinated
+          : latestData.people_fully_vaccinated) +
+        dailyVaccination * fullDoseTimeSpan;
 
       projectedDataFullDose.push({
         date: newDate.toISOString().split('T')[0],
         people_fully_vaccinated: peopleFullyVaccinated,
-        people_fully_vaccinated_per_hundred: +(
-          (peopleFullyVaccinated * 100) /
-          population
-        ).toPrecision(2),
-        daily_vaccinations: fullDoseRate,
+        people_fully_vaccinated_per_hundred: +((peopleFullyVaccinated * 100) / population).toFixed(
+          2
+        ),
+        daily_vaccinations: dailyVaccination,
       });
     });
 
-    projectedDataFirstDose.push({
-      date: dateWhenAllFirstDose.toISOString().split('T')[0],
-      people_vaccinated: populationToBeVaccinated,
-      people_vaccinated_per_hundred: percent,
-      daily_vaccinations: firstDoseRate,
-    });
+    if (projectedDataFirstDose.length) {
+      projectedDataFirstDose.push({
+        date: dateWhenAllFirstDose.toISOString().split('T')[0],
+        people_vaccinated: populationToBeVaccinated,
+        people_vaccinated_per_hundred: percent,
+        daily_vaccinations: firstDoseRate,
+      });
+    }
 
-    projectedDataFullDose.push({
-      date: dateWhenAllFullDose.toISOString().split('T')[0],
-      people_fully_vaccinated: populationToBeVaccinated,
-      people_fully_vaccinated_per_hundred: percent,
-      daily_vaccinations: fullDoseRate,
-    });
+    if (projectedDataFullDose.length) {
+      projectedDataFullDose.push({
+        date: dateWhenAllFullDose.toISOString().split('T')[0],
+        people_fully_vaccinated: populationToBeVaccinated,
+        people_fully_vaccinated_per_hundred: percent,
+        daily_vaccinations: fullDoseRate,
+      });
+    }
 
     projectedDataFirstDose.unshift(country.latest);
     projectedDataFullDose.unshift(country.latest);
