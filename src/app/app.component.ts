@@ -174,12 +174,13 @@ export class AppComponent implements OnInit {
     },
     colors: ['#f5fffa'],
     colorAxis: {
-      max: 100,
+      max: 300,
       stops: [
-        [0, '#f5fffa'],
-        [0.1, '#cbf3de'],
-        [0.4, '#6ccba7'],
-        [1, '#008352'],
+        [0, '#fff9f5'],
+        [0.1, '#e5fa98'],
+        [0.4, '#399983'],
+        // [0.6, '#096c55'],
+        [1, '#01392c'],
       ],
     },
     series: [
