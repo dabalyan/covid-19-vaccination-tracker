@@ -186,20 +186,20 @@ export class DataService {
     }
 
     const population = country.population;
-    const populationToBeVaccinated = Math.round((population * percent) / 100);
+    const populationToBeVaccinated = Math.ceil((population * percent) / 100);
     const remainingFirstDose = populationToBeVaccinated - latestData.people_vaccinated;
     const remainingFullDose = populationToBeVaccinated - latestData.people_fully_vaccinated;
 
     const daysUntilAllFirstDose = Math.max(0, Math.ceil(remainingFirstDose / firstDoseRate));
-    let daysUntilAllFullDose = Math.max(0, Math.ceil(remainingFullDose / fullDoseRate));
+    const daysUntilAllFullDose = Math.max(0, Math.ceil(remainingFullDose / fullDoseRate));
 
-    if (daysUntilAllFirstDose < daysUntilAllFullDose) {
-      const remainingFullDoseAfterFirstIsDone =
-        remainingFullDose - daysUntilAllFirstDose * fullDoseRate;
-      daysUntilAllFullDose =
-        daysUntilAllFirstDose +
-        Math.ceil(remainingFullDoseAfterFirstIsDone / (firstDoseRate + fullDoseRate));
-    }
+    // if (daysUntilAllFirstDose < daysUntilAllFullDose) {
+    //   const remainingFullDoseAfterFirstIsDone =
+    //     remainingFullDose - daysUntilAllFirstDose * fullDoseRate;
+    //   daysUntilAllFullDose =
+    //     daysUntilAllFirstDose +
+    //     Math.ceil(remainingFullDoseAfterFirstIsDone / (firstDoseRate + fullDoseRate));
+    // }
 
     if (
       // !daysUntilAllFirstDose ||
@@ -210,12 +210,6 @@ export class DataService {
       return country;
     }
 
-    const firstDoseTimeSpan = 1;
-    const fullDoseTimeSpan = 1;
-
-    const timesSpanUntilAllFirstDose = Math.floor(daysUntilAllFirstDose / firstDoseTimeSpan);
-    const timeSpansUntilAllFullDose = Math.floor(daysUntilAllFullDose / fullDoseTimeSpan);
-
     const dateWhenAllFirstDose = new Date(date.getTime());
     dateWhenAllFirstDose.setDate(date.getDate() + daysUntilAllFirstDose);
 
@@ -225,44 +219,42 @@ export class DataService {
     const projectedDataFirstDose = [];
     const projectedDataFullDose = [];
 
-    [...Array(timesSpanUntilAllFirstDose).keys()].forEach(i => {
+    [...Array(daysUntilAllFirstDose).keys()].forEach(i => {
       const newDate = new Date(date.getTime());
-      newDate.setDate(date.getDate() + (i + 1) * firstDoseTimeSpan);
+      newDate.setDate(date.getDate() + (i + 1));
 
       if (newDate.getTime() > dateWhenAllFirstDose.getTime()) {
         return;
       }
 
-      const peopleVaccinated =
-        latestData.people_vaccinated + firstDoseRate * (i + 1) * firstDoseTimeSpan;
+      const peopleVaccinated = latestData.people_vaccinated + firstDoseRate * (i + 1);
 
       projectedDataFirstDose.push({
-        date: newDate.toISOString().split('T')[0],
+        date: newDate,
         people_vaccinated: peopleVaccinated,
         people_vaccinated_per_hundred: +((peopleVaccinated * 100) / population).toFixed(2),
         daily_vaccinations: firstDoseRate,
       });
     });
 
-    [...Array(timeSpansUntilAllFullDose).keys()].map(i => {
+    [...Array(daysUntilAllFullDose).keys()].map(i => {
       const newDate = new Date(date.getTime());
-      newDate.setDate(date.getDate() + (i + 1) * fullDoseTimeSpan);
+      newDate.setDate(date.getDate() + (i + 1));
 
-      const isFirstDoseDone = dateWhenAllFirstDose.getTime() < newDate.getTime();
+      // const isFirstDoseDone = dateWhenAllFirstDose.getTime() < newDate.getTime();
 
-      if (newDate.getTime() > dateWhenAllFullDose.getTime()) {
+      if (newDate.getTime() >= dateWhenAllFullDose.getTime()) {
         return;
       }
 
-      const dailyVaccination = (isFirstDoseDone ? firstDoseRate : 0) + fullDoseRate;
+      const dailyVaccination = /*(isFirstDoseDone ? firstDoseRate : 0) + */ fullDoseRate;
       const peopleFullyVaccinated =
         (i
           ? projectedDataFullDose[projectedDataFullDose.length - 1].people_fully_vaccinated
-          : latestData.people_fully_vaccinated) +
-        dailyVaccination * fullDoseTimeSpan;
+          : latestData.people_fully_vaccinated) + dailyVaccination;
 
       projectedDataFullDose.push({
-        date: newDate.toISOString().split('T')[0],
+        date: newDate,
         people_fully_vaccinated: peopleFullyVaccinated,
         people_fully_vaccinated_per_hundred: +((peopleFullyVaccinated * 100) / population).toFixed(
           2
@@ -273,7 +265,7 @@ export class DataService {
 
     if (projectedDataFirstDose.length) {
       projectedDataFirstDose.push({
-        date: dateWhenAllFirstDose.toISOString().split('T')[0],
+        date: dateWhenAllFirstDose,
         people_vaccinated: populationToBeVaccinated,
         people_vaccinated_per_hundred: percent,
         daily_vaccinations: firstDoseRate,
@@ -282,7 +274,7 @@ export class DataService {
 
     if (projectedDataFullDose.length) {
       projectedDataFullDose.push({
-        date: dateWhenAllFullDose.toISOString().split('T')[0],
+        date: dateWhenAllFullDose,
         people_fully_vaccinated: populationToBeVaccinated,
         people_fully_vaccinated_per_hundred: percent,
         daily_vaccinations: fullDoseRate,
